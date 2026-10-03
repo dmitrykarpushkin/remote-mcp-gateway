@@ -1,0 +1,40 @@
+# Copy to gateway.toml and point GATEWAY_CONFIG at it. Environment variables override:
+# GATEWAY_HOST, GATEWAY_PORT, GATEWAY_STATE_DIR, GATEWAY_PLUGINS, GATEWAY_FILES_ROOT,
+# GATEWAY_PATH_KEY, GATEWAY_DISPATCHER, GATEWAY_TRIGGER_ID.
+
+[gateway]
+name = "workspace"
+host = "127.0.0.1"
+port = 8766
+# Holds the generated key (mode 600), calls.jsonl, memory.md, tasks.json
+state_dir = ".state"
+# files, sessions: read-only. memory: append-only notes. delegation: background tasks.
+plugins = ["files", "sessions"]
+# Accept /<key>/mcp for clients that cannot send headers (the key then appears in URLs: keep TLS on)
+path_key = false
+instructions = """
+Read-only tools over a shared workspace and the Claude Code sessions on this machine.
+Every call is logged.
+"""
+
+[files]
+root = "~/workspace"
+hidden = ["__pycache__", "node_modules", "logs"]
+max_chars = 8000
+
+[sessions]
+claude_home = "~/.claude"
+recent_hours = 24
+[sessions.projects]
+# session working directory = project name shown to the model
+"~/code/website" = "website"
+"~/code/api" = "api"
+
+[delegation]
+# none: executors poll pending_tasks. command: run argv with the task on stdin.
+# claude-trigger: fire a saved Claude Code remote trigger through the headless claude CLI.
+dispatcher = "none"
+# command = ["curl", "-fsS", "-X", "POST", "--data-binary", "@-", "http://127.0.0.1:9000/hooks/task"]
+# trigger_id = "trig_..."
+fire_model = "haiku"
+retries = 1
