@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..calllog import logged_tool
 
 
 class Files:
@@ -45,7 +44,7 @@ class Files:
 def register(server, settings, log) -> Files:
     c = settings.files
     files = Files(c.root, c.hidden, c.max_chars, c.max_entries)
-    tool = logged_tool(server, log)
+    tool = server.tool
 
     @tool
     def list_files(subdir: str = "") -> list[str]:

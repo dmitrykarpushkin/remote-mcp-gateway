@@ -23,7 +23,6 @@ import time
 from pathlib import Path
 from typing import Protocol
 
-from ..calllog import logged_tool
 
 STATUSES = ("queued", "sent", "not_sent", "in_progress", "done", "failed", "needs_you")
 FINAL = {"done", "failed", "needs_you"}
@@ -214,7 +213,7 @@ def format_updates(tasks: list[dict]) -> str:
 def register(server, settings, log) -> Delegation:
     c = settings.delegation
     delegation = Delegation(TaskStore(settings.state_dir / "tasks.json"), make_dispatcher(c), c.retries)
-    tool = logged_tool(server, log)
+    tool = server.tool
 
     @tool
     def delegate_task(task: str) -> str:

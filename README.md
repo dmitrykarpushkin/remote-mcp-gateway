@@ -26,13 +26,17 @@ to use daily:
 
 ## Architecture
 
+Built on [FastMCP](https://github.com/PrefectHQ/fastmcp): the protocol, transport and tool schemas are FastMCP's,
+the audit log is a FastMCP middleware. What this repo adds is the key check that hosted clients can satisfy,
+least-privilege plugins and delegation to background agents.
+
 ```
  MCP client (claude.ai connector, Claude Code, SDK)
         │  streamable HTTP  /mcp   (key in header or /<key>/mcp)
         ▼
  ┌─────────────── RequireKey (ASGI) ───────────────┐
- │  MCPServer                                      │
- │   ├─ logged_tool ─▶ CallLog (calls.jsonl)       │
+ │  FastMCP server                                 │
+ │   ├─ CallLogMiddleware ─▶ calls.jsonl           │
  │   ├─ files       list_files, read_file          │  read-only, confined to files.root
  │   ├─ sessions    sessions_overview,             │  read-only: Claude Code session registry
  │   │              session_detail                 │  and transcripts, configured projects only
