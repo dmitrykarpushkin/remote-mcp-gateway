@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import functools
-import inspect
 import json
 import threading
 import time
 from pathlib import Path
+
+from fastmcp.server.middleware import Middleware
 
 
 class CallLog:
@@ -30,20 +30,12 @@ class CallLog:
         return [json.loads(line) for line in self.path.read_text().splitlines() if line.strip()]
 
 
-def logged_tool(server, log: CallLog):
-    """Like `@server.tool()`, but every call is written to the call log first (with its arguments)."""
+class CallLogMiddleware(Middleware):
+    """Writes every tool call to the call log (with its arguments) before the tool runs."""
 
-    def deco(fn):
-        sig = inspect.signature(fn)
+    def __init__(self, log: CallLog):
+        self.log = log
 
-        @functools.wraps(fn)
-        def wrapper(*a, **kw):
-            bound = sig.bind(*a, **kw)
-            bound.apply_defaults()
-            log.write(fn.__name__, **bound.arguments)
-            return fn(*a, **kw)
-
-        server.tool()(wrapper)
-        return wrapper
-
-    return deco
+    async def on_call_tool(self, context, call_next):
+        self.log.write(context.message.name, **(context.message.arguments or {}))
+        return await call_next(context)

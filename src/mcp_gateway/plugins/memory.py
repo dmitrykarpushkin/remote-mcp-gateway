@@ -6,8 +6,6 @@ import threading
 import time
 from pathlib import Path
 
-from ..calllog import logged_tool
-
 
 class Memory:
     def __init__(self, path: Path):
@@ -28,7 +26,7 @@ class Memory:
 
 def register(server, settings, log) -> Memory:
     memory = Memory(settings.state_dir / "memory.md")
-    tool = logged_tool(server, log)
+    tool = server.tool
 
     @tool
     def memory_read() -> str:

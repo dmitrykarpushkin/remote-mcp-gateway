@@ -12,8 +12,6 @@ import os
 import time
 from pathlib import Path
 
-from ..calllog import logged_tool
-
 STATUS = {"idle": "waiting for you", "busy": "working", "shell": "open (shell)"}
 
 
@@ -151,7 +149,7 @@ class Sessions:
 def register(server, settings, log) -> Sessions:
     c = settings.sessions
     sessions = Sessions(c.claude_home, c.projects, c.recent_hours)
-    tool = logged_tool(server, log)
+    tool = server.tool
 
     @tool
     def sessions_overview() -> str:
