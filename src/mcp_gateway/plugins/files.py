@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 
-
 class Files:
     def __init__(self, root: Path, hidden: tuple[str, ...] = (), max_chars: int = 8000, max_entries: int = 200):
         self.root = root.resolve()

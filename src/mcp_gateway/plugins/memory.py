@@ -7,7 +7,6 @@ import time
 from pathlib import Path
 
 
-
 class Memory:
     def __init__(self, path: Path):
         self.path = path

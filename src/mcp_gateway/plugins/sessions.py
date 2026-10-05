@@ -12,7 +12,6 @@ import os
 import time
 from pathlib import Path
 
-
 STATUS = {"idle": "waiting for you", "busy": "working", "shell": "open (shell)"}
 
 

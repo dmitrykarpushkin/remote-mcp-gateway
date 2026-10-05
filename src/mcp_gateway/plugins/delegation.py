@@ -23,7 +23,6 @@ import time
 from pathlib import Path
 from typing import Protocol
 
-
 STATUSES = ("queued", "sent", "not_sent", "in_progress", "done", "failed", "needs_you")
 FINAL = {"done", "failed", "needs_you"}
 
