@@ -1,104 +1,84 @@
 # remote-mcp-gateway
 
-A small **remote MCP server** that gives Claude (claude.ai custom connectors, Claude Code, the Agent SDK)
-or any other MCP client safe, audited access to a machine: a shared key, a JSONL log of every tool call,
-read-only tools by default, and an opt-in plugin that lets a chat or voice model **delegate work to
-background agents** and read the results back later.
+**English** · [Русский](README.ru.md)
 
-It runs in production as the "hands" of a personal assistant: a voice conversation on a phone uses it to
-check what the coding agents on a server are doing, read shared notes, and hand off tasks.
+[![CI](https://github.com/dmitrykarpushkin/remote-mcp-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/dmitrykarpushkin/remote-mcp-gateway/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-## Why
+**Let Claude on your phone or in the browser reach your machine, with a key, a log of every call and no shell.**
 
-Hosted assistants can only reach your machine through remote MCP connectors, and those connectors have sharp
-edges: some clients only send a fixed set of header names, voice modes may not send headers at all, and the
-model's own account of what it did is not evidence. This gateway is the minimum that makes that safe enough
-to use daily:
-
-- **Key auth as ASGI middleware**: `Authorization: Bearer`, `X-API-Key` or `X-Gateway-Key`, compared in constant
-  time; optionally the key as the first path segment for header-less clients (masked in logs). The key is
-  generated on first start with mode `600`.
-- **Audit log**: every call, with its arguments, goes to `calls.jsonl` before the tool runs.
-- **Least privilege**: plugins are opt-in. The defaults (`files`, `sessions`) only read; file access is
-  confined to one root (no `..`, absolute paths, dotfiles or symlinks out of the root).
-- **Delegation without giving the model a shell**: `delegate_task` only queues text. Executors are separate,
-  sandboxed agent sessions that pick tasks up via `pending_tasks` and close them with `report_result`.
-
-## Architecture
-
-Built on [FastMCP](https://github.com/PrefectHQ/fastmcp): the protocol, transport and tool schemas are FastMCP's,
-the audit log is a FastMCP middleware. What this repo adds is the key check that hosted clients can satisfy,
-least-privilege plugins and delegation to background agents.
-
-```
- MCP client (claude.ai connector, Claude Code, SDK)
-        │  streamable HTTP  /mcp   (key in header or /<key>/mcp)
-        ▼
- ┌─────────────── RequireKey (ASGI) ───────────────┐
- │  FastMCP server                                 │
- │   ├─ CallLogMiddleware ─▶ calls.jsonl           │
- │   ├─ files       list_files, read_file          │  read-only, confined to files.root
- │   ├─ sessions    sessions_overview,             │  read-only: Claude Code session registry
- │   │              session_detail                 │  and transcripts, configured projects only
- │   ├─ memory      memory_read, memory_remember   │  append-only notes (opt-in)
- │   └─ delegation  delegate_task, task_updates,   │  opt-in
- │                  pending_tasks, report_result   │
- └───────────────────────┬─────────────────────────┘
-                         │ TaskStore (tasks.json, atomic writes) + worker thread
-                         ▼
-               Dispatcher.fire(task)
-               ├─ none            executors poll pending_tasks
-               ├─ command         any argv, task text on stdin (webhook, queue, script)
-               └─ claude-trigger  fire a saved Claude Code remote trigger via the headless CLI;
-                                  the trigger carries a fixed message, tasks wait in the store
-```
-
-The `claude-trigger` dispatcher is how a voice conversation wakes a long-running coding agent: a cheap model in
-headless `claude -p` gets exactly one allowed tool (`RemoteTrigger`) and one instruction, so the gateway never
-touches the user's tokens. A failed fire is retried once and surfaced in `task_updates` with the reason; tasks
-queued before a restart are re-dispatched on start.
-
-## Run
-
-```bash
-pip install -e .
-cp gateway.example.toml gateway.toml     # set files.root, sessions.projects, plugins
-GATEWAY_CONFIG=gateway.toml mcp-gateway
-# workspace: http://127.0.0.1:8766/mcp, plugins files, sessions, key in .state/key
-```
-
-Expose it through a tunnel or reverse proxy with TLS (Cloudflare Tunnel, Tailscale Funnel, nginx), then add it
-as a custom connector with the header `Authorization: Bearer <contents of .state/key>`.
-
-Claude Code:
-
-```bash
-claude mcp add --transport http workspace https://your-host/mcp --header "Authorization: Bearer $(cat .state/key)"
-```
-
-## Example
+For people who want a hosted assistant (a claude.ai custom connector, voice mode, Claude Code, the Agent SDK) to
+check on their server, read their notes and hand work to background agents, without giving the model free rein.
 
 ```text
 > what are my coding sessions doing?
   ⎿ sessions_overview()
 [website] Fix the footer — waiting for you, active 3 min ago
-  you wrote: please fix the footer on mobile
   agent said last: The footer overlaps the cookie banner below 380px. Should I move the banner up?
-  unfinished tool calls (may wait for permission): Edit
-
-[api] Rate limits — working, active just now
-  you wrote: add per-key rate limits
 
 > ask the website agent to go ahead and move the banner
   ⎿ delegate_task(task="Website session: yes, move the cookie banner above the footer")
 Accepted (id t3f9a1c). The result will appear in task_updates.
 ```
 
+*An illustrative session: the model sees what the coding agents are doing and queues a task, but never runs a command.*
+
+## Why use it
+
+- **Works with clients that cannot set custom headers.** The key is accepted as `Authorization: Bearer`,
+  `X-API-Key`, `X-Gateway-Key` or, for header-less clients, as the first path segment (masked in the log).
+- **Every call is written down before it runs.** Tool name and arguments go to `calls.jsonl`, so you can check
+  what the model did instead of trusting its own account.
+- **Read-only unless you say otherwise.** The default tools only read, and file access is confined to one folder:
+  no `..`, absolute paths, dotfiles or symlinks out of it.
+- **Delegation without a shell.** `delegate_task` only queues text; separate, sandboxed agent sessions pick tasks
+  up and report results back.
+- **Small and tested.** Built on FastMCP; 39 tests run without network or a real `claude` binary.
+
+## How it compares
+
+| | Local MCP server (stdio) | A stdio server bridged to HTTP behind a tunnel | **remote-mcp-gateway** |
+|---|---|---|---|
+| Reachable from claude.ai, phone, voice | no | yes | yes |
+| Auth that header-less clients can pass | not needed | up to you | built in |
+| Log of every call | up to you | up to you | built in, written before the call |
+| Hand tasks to background agents | no | no | opt-in plugin |
+
+If the assistant only runs on your laptop, a local stdio server is simpler and safer. Use this gateway when the
+client is hosted and you need it to reach a machine of yours over the internet.
+
+## Quick start
+
 ```bash
-$ tail -2 .state/calls.jsonl
-{"ts": "…", "tool": "sessions_overview"}
-{"ts": "…", "tool": "delegate_task", "task": "Website session: yes, move the cookie banner above the footer"}
+git clone https://github.com/dmitrykarpushkin/remote-mcp-gateway && cd remote-mcp-gateway
+pip install -e . && cp gateway.example.toml gateway.toml   # set files.root, sessions.projects, plugins
+GATEWAY_CONFIG=gateway.toml mcp-gateway                     # http://127.0.0.1:8766/mcp, key in .state/key
 ```
+
+Put it behind TLS (Cloudflare Tunnel, Tailscale Funnel or nginx) and add it as a custom connector with
+`Authorization: Bearer <contents of .state/key>`. For Claude Code:
+
+```bash
+claude mcp add --transport http workspace https://your-host/mcp --header "Authorization: Bearer $(cat .state/key)"
+```
+
+## How it works
+
+```text
+MCP client --HTTPS--> key check --> FastMCP server --> call log (calls.jsonl)
+                                        ├─ files       read-only, one root folder
+                                        ├─ sessions    read-only view of Claude Code sessions
+                                        ├─ memory      append-only notes (opt-in)
+                                        └─ delegation  task queue + dispatcher (opt-in)
+```
+
+Plugins, dispatchers (poll, any command, a saved Claude Code remote trigger) and the design choices are in
+[docs/design.md](docs/design.md).
+
+## Status
+
+In daily use as the "hands" of a personal voice assistant: from a phone it checks what the coding agents on a
+server are doing, reads shared notes and hands off tasks. Rewritten onto FastMCP in October 2026.
 
 ## Development
 
@@ -108,6 +88,6 @@ ruff check . && ruff format --check .
 pytest -q
 ```
 
-Tests cover the auth middleware over an in-process ASGI transport, path confinement, transcript parsing on
-fixture JSONL, the task lifecycle, retries and restart recovery, and all dispatchers with a mocked
-`subprocess.run`; nothing touches the network or a real `claude` binary.
+---
+
+License: [MIT](LICENSE) · Author: [Dmitry Karpushkin](https://github.com/dmitrykarpushkin)
