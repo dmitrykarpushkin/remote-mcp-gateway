@@ -77,7 +77,7 @@ Plugins, dispatchers (poll, any command, a saved Claude Code remote trigger) and
 
 ## Status
 
-In daily use as the "hands" of a personal voice assistant: from a phone it checks what the coding agents on a
+Runs as the "hands" of a personal voice assistant: from a phone it checks what the coding agents on a
 server are doing, reads shared notes and hands off tasks. Rewritten onto FastMCP in October 2026.
 
 ## Development
